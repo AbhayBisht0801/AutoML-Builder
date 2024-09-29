@@ -1,0 +1,11 @@
+langchain
+langchain-community
+pandas
+langchain_core
+langchain_experimental
+langchain_google_genai
+load_dotenv
+pandasai
+tabulate
+pydantic
+streamlit 
