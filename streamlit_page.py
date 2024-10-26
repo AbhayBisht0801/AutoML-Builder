@@ -10,4 +10,7 @@ project_path=st.text_input('project Path')
 
 if st.button('Submit'):
     pass
-
+code=parse_output(result)
+print(code)
+code_func=code_to_function(code=code['code'])
+code_to_file(code=code_func,file_name='preprocessing.py')
