@@ -79,7 +79,7 @@ def create_directories(path_to_directories: list, verbose=True):
         os.makedirs(path, exist_ok=True)
 import os
 
-def gen_to_py(result, path='project'):
+def gen_to_py(result, path='project',file_name=None):
     error = True
     while error:
         try:
@@ -87,11 +87,11 @@ def gen_to_py(result, path='project'):
             parsed = parse_output(result)
             
             # Try writing the code to the file
-            code_to_file(code=parsed['code'], name=os.path.join(path, parsed['filename']))
+            code_to_file(code=parsed['code'], name=os.path.join(path, file_name))
             
             # If no exception is raised, set error to False and return
             error = False
-            return parsed['code'], parsed['filename']
+            return parsed['code'], file_name
         
         except Exception as e:
             # Log or handle the error if needed
@@ -105,9 +105,6 @@ def gen_to_py(result, path='project'):
 
 
 
-import os
-import sys
-import subprocess
 
 def run_generated_code(filename):
     try:
@@ -119,7 +116,7 @@ def run_generated_code(filename):
 
         # Run the Python file using the environment's Python interpreter
         python_path = os.path.join(env_name, 'Scripts', 'python') if sys.platform == 'win32' else os.path.join(env_name, 'bin', 'python')
-        subprocess.run([python_path, file], check=True)
+        result = subprocess.run([python_path, file], check=True, stderr=subprocess.PIPE, text=True)
         return 'executed'
     except subprocess.CalledProcessError as e:
         # Return any error that occurred during execution
@@ -130,10 +127,10 @@ def correct_code(file_name,error):
     with open(os.path.join(file,file_name), "r") as f:
         code=f.read()
         f.close()
-    template='''Correct the {code} getting following {error} make changes in code accordingly'''
+    template='''Correct the {code} getting following {error} make changes in code accordingly. Generate the entire corrected  code.'''
     prompt=PromptTemplate(template=template,input_variables=['code','error'])
     result=llm.invoke(prompt.format(code=code,error=error))
-    gen_to_py(result=result)
+    gen_to_py(result=result,file_name=file_name)
 
 def requirement(foldername='project'):
     pattern = r'^import (\w+)|^from (\w+)'

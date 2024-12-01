@@ -9,11 +9,10 @@ import os
 import logging
 import time
 import shutil
-llm=ChatGoogleGenerativeAI(model='gemini-1.5-pro')
+llm=ChatGoogleGenerativeAI(model='gemini-1.0-pro')
 os.makedirs('project/logs', exist_ok=True)
-logging.basicConfig(filename='project/logs/code_correction.log', 
-                            level=logging.INFO, 
-                            format='%(asctime)s - %(message)s')
+logging.basicConfig(filename='project/logs/event.logs', level=logging.INFO, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 class MLAagent:
     def __init__(self,problem_statement,dataset_path,llm):
@@ -50,9 +49,12 @@ class MLAagent:
 
         numeric_columns = list(df.select_dtypes(include=numerics).columns)
         categorical_columns = [i for i in df.columns if i not in numeric_columns]
+        categorical_columns_features = {col: df[col].unique().tolist() for col in categorical_columns}
+
         missing_value=(df.isnull().sum()*100)/df.shape[0]
         self.categorical_columns=categorical_columns
         self.numerical_columns=numeric_columns
+        self.categorical_columns_features=categorical_columns_features
         self.missing_value_columns=missing_value.to_dict()
     def preprocessing(self):
         logging.info('Starting the  Preprocessing of the data')
@@ -63,7 +65,7 @@ Input Information:
 - User Requirement: {user_requirement} (Describes the context and objective of the task).
 - Dataset Path: {dataset_path} (Path to the dataset file
 - Numerical Columns: {numerical_columns} (List of numerical features in the dataset).
-- Categorical Columns: {categorical_columns} (List of categorical features in the dataset).
+- Categorical Columns: {categorical_columns} and their features {categorical_columns_features} (List of categorical features and dictionary with their features in the dataset).
 - Columns with Missing Values: {missing_value_columns} (Columns that contain missing values).
 
 Instructions for Preprocessing:
@@ -73,7 +75,7 @@ Instructions for Preprocessing:
    - If there are no missing values, skip this step.
 
 2. Remove Irrelevant Columns:
-   - Identify and drop columns that do not contribute to achieving the {user_requirement}.
+   - Understand the problem_statement and drop columns that do not contribute to achieving the {user_requirement}.
    - For example, irrelevant columns could include unique identifiers like "customerId" or personal details like "name".
    - Irrelevant columns should be identified from {numerical_columns} and {categorical_columns}.
 
@@ -81,7 +83,7 @@ Instructions for Preprocessing:
    - Perform additional cleaning steps such as removing duplicate records, handling outliers, or correcting inconsistent data formats.
 
 4. Encode Categorical Columns:
-   - Convert {categorical_columns} into numeric representations using appropriate encoding techniques, such as One-Hot Encoding or Label Encoding.
+   - Convert {categorical_columns} into numeric representations using appropriate encoding techniques based on the {categorical_columns_features} to decide if to use One-Hot Encoding or Label Encoding.
    - Do not include any columns identified as irrelevant in this step.
 
 5. Scale Numeric Columns:
@@ -92,42 +94,78 @@ Instructions for Preprocessing:
    - Save the preprocessing steps and transformations as pickle files in a folder named 'project/preprocessing'.
 
 Additional Notes:
-   - Ensure the preprocessing steps align with the {user_requirement}.
-   - Include any libraries or modules required for implementation.
-"""
+    - Include all libraries or modules required for implementation.
+   - Ensure the preprocessing steps align with the {user_requirement} and code generated is not encapulated inside a function.
+   -Save the train test split data in preprocessing folder so that it can be later used for training.
+   - Create the specific directory before saving the files.
 
-        # Create the template
-        template = PromptTemplate(
-            template=prompt, 
-            input_variables=['categorical_columns', 'numerical_columns', 'missing_value_columns', 'user_requirement','dataset_path']
-        )
+"""
+        try:
+            # Create the template
+            template = PromptTemplate(
+                template=prompt, 
+                input_variables=['categorical_columns', 'numerical_columns', 'missing_value_columns', 'user_requirement','dataset_path','categorical_columns_features']
+            )
+            
+            # Format the prompt
+            formatted = template.format(
+                categorical_columns=self.categorical_columns, 
+                numerical_columns=self.numerical_columns, 
+                missing_value_columns=self.missing_value_columns, 
+                user_requirement=self.problem_statement,
+                dataset_path=self.dataset_path,
+                categorical_columns_features=self.categorical_columns_features
+            )
+            
+            # Call the LLM to get the code based on the formatted prompt
+            print('Hello')
+            counter=0
+            while counter  <2:
+                output=llm.invoke(formatted).content
+                counter+=1
+            result=output
+            self.preprocessinf_code,self.preprocess_path=gen_to_py(result=result,file_name='preprocessing.py')
         
-        # Format the prompt
-        formatted = template.format(
-            categorical_columns=self.categorical_columns, 
-            numerical_columns=self.numerical_columns, 
-            missing_value_columns=self.missing_value_columns, 
-            user_requirement=self.problem_statement,
-            dataset_path=self.dataset_path
-        )
-        
-        # Call the LLM to get the code based on the formatted prompt
-        
-        counter=0
-        while counter  <2:
-            output=llm.invoke(formatted).content
-            counter+=1
-        result=output
-        self.preprocessinf_code,self.preprocess_path=gen_to_py(result=result)
-       
-        logging.info('Preprocessing is Completed')
+            logging.info('Preprocessing is Completed')
+        except Exception as e:
+            logging.error(f"Error in Preprocessing.retrying again.")
+            self.preprocessinf_code,self.preprocess_path=gen_to_py(result=result)
+
+
         
     def Model_building(self):
         logging.info('Starting Model Building Process')
         prompt = '''
-        Given the preprocessed code {preprocessing_code}, load the dataset and train  a ML model.Use multiple model and find the model that
-        performs the best on the test set. Use the best model to and apply hyperparameter tuning to improve the accuracy of the model. Based on 
-        the problem statement {problem_statement}.Save The best Model in the 'project/artifact/Model' folder
+Using the provided {preprocessing_code}, generate a comprehensive Python pipeline for training, evaluating, and optimizing machine learning models. The pipeline should perform the following steps:
+
+Dataset Loading:
+Extract file paths for pre-split datasets (X_train, y_train, X_test, y_test) from the given preprocessing_code. Load these datasets into memory for training and evaluation.
+
+Model Training and Evaluation:
+Train multiple machine learning models (e.g., Random Forest, Logistic Regression, XGBoost) and evaluate their performance using appropriate metrics (e.g., accuracy, F1-score, or another relevant metric). Identify the best-performing model based on test set results.
+
+Hyperparameter Tuning:
+Enhance the accuracy of the best-performing model through hyperparameter tuning (e.g., grid search or randomized search). Reevaluate the optimized model to confirm improvements.
+
+Logging:
+Implement detailed logging throughout the pipeline to capture significant events, processes, and outcomes, ensuring traceability and debugging support in a production environment.
+
+Model Saving:
+Save the best-performing, optimized model to the directory project/artifact/Model. Ensure this directory is created dynamically if it does not already exist.
+
+Production-Ready Standards:
+Use try-except blocks where applicable to handle potential exceptions gracefully.
+
+Additional Requirements:
+
+Use Python libraries such as scikit-learn for model training and evaluation.
+Optimize for scalability and maintainability in a production setting.
+Provide example output logs in your implementation.
+Clearly align the methodology with the given {problem_statement} to ensure relevance to the problem context.
+Deliverable:
+Generate Python code for the model training as described above.
+
+
         '''
         template = PromptTemplate(
             template=prompt, 
@@ -141,7 +179,7 @@ Additional Notes:
         while counter  <2:
             output=llm.invoke(formatted).content
             counter+=1
-        self.model_building_code=gen_to_py(output)
+        self.model_building_code=gen_to_py(output,file_name='model_training.py')
         logging.info('Model building  is Completed')
         
     def check_code(self, max_attempts=3):
@@ -152,9 +190,7 @@ Additional Notes:
         
         
         # Get the list of Python files in the 'project' folder
-        files = os.listdir('project')
-        python_files = [file for file in files if file.endswith('.py')]
-        python_files = sorted(python_files, reverse=True)
+        python_files=['preprocessing.py','model_training.py']
         
         for file in python_files:
             attempt = 0
@@ -180,4 +216,4 @@ Additional Notes:
         print("Code checking process completed. Check logs for details on any issues encountered.")
 
         
-agent=MLAagent(problem_statement='Create a ML model that can help in finding the customer that will default from loan or not',dataset_path=r"C:\Users\bisht\Downloads\archive (83)\Loan_Default.csv",llm=llm)
+agent=MLAagent(problem_statement='Create a ML model that helps to find if a person has diabetes or not ',dataset_path=r"C:\\Users\\bisht\\Downloads\\archive (84)\\diabetes.csv",llm=llm)
