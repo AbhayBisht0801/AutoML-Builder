@@ -7,4 +7,5 @@ langchain_google_genai
 load_dotenv
 
 pydantic
-streamlit 
+flask
+ 
