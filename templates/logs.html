@@ -1,0 +1,23 @@
+<!-- templates/logs.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Processing Logs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/logs.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Processing Logs</h1>
+            <p>File: {{ file.filename }}</p>
+        </div>
+        <div class="log-container" id="logs"></div>
+        <div class="status">
+            <div class="spinner"></div>
+            Processing in progress...
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/logs.js') }}"></script>
+</body>
+</html>

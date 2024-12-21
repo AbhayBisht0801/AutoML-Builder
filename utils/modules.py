@@ -1,4 +1,4 @@
-modules={
+moduless={
     'sklearn': 'scikit-learn',
     'opencv': 'opencv-python',
     'pandas': 'pandas',

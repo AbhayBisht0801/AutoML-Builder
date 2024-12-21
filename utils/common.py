@@ -13,13 +13,14 @@ import pandas as pd
 from langchain_google_genai import ChatGoogleGenerativeAI,GoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from load_dotenv import load_dotenv
-from modules import modules,python_inbuilt_modules
+from utils.modules import moduless,python_inbuilt_modules
 load_dotenv()
 import re
 import subprocess
 llm=GoogleGenerativeAI(model='gemini-1.0-pro')
 import os
 import re
+print (moduless)
 
 # By default, unless you choose a different LLM, it will use BambooLLM.
 # You can get your free API key signing up at https://pandabi.ai (you can also configure it in your .env file)
@@ -156,7 +157,7 @@ def requirement(foldername='project'):
                     library.extend([name for name in match.groups() if name])
 
     # Remove duplicates and join modules with newline
-    lib=[modules[k] for k in library if k in modules ]
+    lib=[moduless[k] for k in library if k in moduless ]
 
 
     libraries = '\n'.join(set(lib))

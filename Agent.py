@@ -3,43 +3,44 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from load_dotenv import load_dotenv
 load_dotenv()
-from common import gen_to_py,run_generated_code,correct_code,create_directories,requirement,project_setup
+from utils.common import gen_to_py,run_generated_code,correct_code,create_directories,requirement,project_setup
 import subprocess
 import os
 import logging
 import time
 import shutil
-llm=ChatGoogleGenerativeAI(model='gemini-1.0-pro')
-os.makedirs('project/logs', exist_ok=True)
-logging.basicConfig(filename='project/logs/event.logs', level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+import os
+import io
+import logging
+from io import StringIO
+log_stream = StringIO()
+
+# Configure standard logging
+
+llm=ChatGoogleGenerativeAI(model='gemini-1.5-pro')
+
 
 class MLAagent:
-    def __init__(self,problem_statement,dataset_path,llm):
+    def __init__(self,problem_statement,dataset_path,logger,llm=llm):
         self.problem_statement = problem_statement
-        
         self.dataset_source=dataset_path
-        
         self.llm=llm
-        self.setup_directory()
-        self.data_insights()
-        self.preprocessing()
-        self.Model_building()
-        self.check_code()
+        self.logger=logger
+        
     def setup_directory(self):
-        logging.info('Intiallizing the setup')
+        self.logger.info('Setting up directory and redirecting Dataset')
         create_directories(['project'])
         data_dir=os.path.join('project','data')
         create_directories([data_dir])
         if self.dataset_source.endswith('csv')==True:
-            shutil.copy(self.dataset_source,os.path.join(data_dir,'data.csv'))
+            shutil.move(self.dataset_source,os.path.join(data_dir,'data.csv'))
         else:
-            shutil.copy(self.dataset_source,os.path.join(data_dir,'data.xlsx'))
+            shutil.move(self.dataset_source,os.path.join(data_dir,'data.xlsx'))
         self.dataset_path=os.path.join(data_dir,os.listdir(data_dir)[0])
-        logging.info('Directory setup complete')
+        self.logger.info(f'Setting completed .Dataset moved to {self.dataset_path}')
         
     def data_insights(self):
-        logging.info(' Collecting Data Insights')
+        self.logger.info(' Collecting Data Insights')
         
         if self.dataset_path.endswith('csv')==True:
             df=pd.read_csv(self.dataset_path)
@@ -56,8 +57,10 @@ class MLAagent:
         self.numerical_columns=numeric_columns
         self.categorical_columns_features=categorical_columns_features
         self.missing_value_columns=missing_value.to_dict()
+        self.logger.info('Data Insights Collected')
+
     def preprocessing(self):
-        logging.info('Starting the  Preprocessing of the data')
+        self.logger.info('Starting the  Preprocessing of the data')
         prompt = """
 Using the input details provided below, generate Python code for preprocessing the dataset:
 
@@ -98,6 +101,7 @@ Additional Notes:
    - Ensure the preprocessing steps align with the {user_requirement} and code generated is not encapulated inside a function.
    -Save the train test split data in preprocessing folder so that it can be later used for training.
    - Create the specific directory before saving the files.
+   
 
 """
         try:
@@ -126,15 +130,16 @@ Additional Notes:
             result=output
             self.preprocessinf_code,self.preprocess_path=gen_to_py(result=result,file_name='preprocessing.py')
         
-            logging.info('Preprocessing is Completed')
+            self.logger.info('Preprocessing is Completed')
         except Exception as e:
-            logging.error(f"Error in Preprocessing.retrying again.")
+            self.logger.error(f"Error in Preprocessing.retrying again.")
             self.preprocessinf_code,self.preprocess_path=gen_to_py(result=result)
+            self.logger.info('Preprocessing is Completed')
 
 
-        
+
     def Model_building(self):
-        logging.info('Starting Model Building Process')
+        self.logger.info('Starting Model Building Process')
         prompt = '''
 Using the provided {preprocessing_code}, generate a comprehensive Python pipeline for training, evaluating, and optimizing machine learning models. The pipeline should perform the following steps:
 
@@ -147,8 +152,7 @@ Train multiple machine learning models (e.g., Random Forest, Logistic Regression
 Hyperparameter Tuning:
 Enhance the accuracy of the best-performing model through hyperparameter tuning (e.g., grid search or randomized search). Reevaluate the optimized model to confirm improvements.
 
-Logging:
-Implement detailed logging throughout the pipeline to capture significant events, processes, and outcomes, ensuring traceability and debugging support in a production environment.
+
 
 Model Saving:
 Save the best-performing, optimized model to the directory project/artifact/Model. Ensure this directory is created dynamically if it does not already exist.
@@ -175,24 +179,28 @@ Generate Python code for the model training as described above.
             preprocessing_code=self.preprocessinf_code,
             problem_statement=self.problem_statement
         )
+        
         counter=0
         while counter  <2:
             output=llm.invoke(formatted).content
             counter+=1
-        self.model_building_code=gen_to_py(output,file_name='model_training.py')
-        logging.info('Model building  is Completed')
+        self.model_building_code,self.preprocess_path1=gen_to_py(output,file_name='model_training.py')
+        self.logger.info('Model building  is Completed')
         
     def check_code(self, max_attempts=3):
-        logging.info('Checking the generated Codes')
+        self.logger.info('Setting Up the environment and installing the required library')
         requirement()
         project_setup()
         # Ensure a log file for recording issues
-        
+        self.logger.info('Setup Completed')
+
         
         # Get the list of Python files in the 'project' folder
+        self.logger.info('Checking the generated Codes')
         python_files=['preprocessing.py','model_training.py']
         
         for file in python_files:
+            self.logger.info(f'Checking {file} code ')
             attempt = 0
             execution = False
             
@@ -200,20 +208,28 @@ Generate Python code for the model training as described above.
                 result = run_generated_code(file)
                 
                 if result == 'executed':
-                    logging.info(f"{file} executed successfully.")
+                    self.logger.info(f"{file} executed successfully.")
                     execution = True
                 else:
-                    logging.error(f"Attempt {attempt + 1} failed for {file} with error: {result}")
+                    self.logger.info.error(f"Attempt {attempt + 1} failed for {file} with error: {result}")
                     attempt += 1
                     if attempt < max_attempts:
-                        logging.info(f"Attempting to correct {file}, attempt {attempt + 1}.")
+                        self.logger.info(f"Attempting to correct {file}, attempt {attempt + 1}.")
                         correct_code(file_name=file, error=result)
                         time.sleep(3)
                     else:
-                        logging.error(f"Max attempts reached for {file}. Could not resolve the issue.")
+                        self.logger.error(f"Max attempts reached for {file}. Could not resolve the issue.")
                         print(f"Max attempts reached for {file}. Please check the logs for details.")
 
-        print("Code checking process completed. Check logs for details on any issues encountered.")
-
+        self.logger.info('The Process is Completed.Your Project Folder is available in Project Creation')
+    def execute_all(self):
+        self.setup_directory()
+        self.data_insights()
+        self.preprocessing()
+        self.Model_building()
+        self.check_code()
+        self.logger.info('The Process is Completed.Your Project Folder is available in Project Creation')
         
-agent=MLAagent(problem_statement='Create a ML model that helps to find if a person has diabetes or not ',dataset_path=r"C:\\Users\\bisht\\Downloads\\archive (84)\\diabetes.csv",llm=llm)
+# agent=MLAagent(problem_statement='Create a ML model that helps to find if a person has diabetes or not ',dataset_path=r"C:\\Users\\bisht\\Downloads\\archive (84)\\diabetes.csv",logger=logger)
+
+    
